@@ -12,19 +12,28 @@ export function useReactionCount(trackId: string | undefined) {
   const [count, setCount] = useState(0);
   const [hasReacted, setHasReacted] = useState(false);
   const trackIdRef = useRef(trackId);
-  trackIdRef.current = trackId;
+
+  useEffect(() => {
+    trackIdRef.current = trackId;
+  }, [trackId]);
 
   // trackId 변경 시 카운트 조회
   useEffect(() => {
-    if (!trackId) {
-      setCount(0);
-      setHasReacted(false);
-      return;
-    }
+    const updateId = window.setTimeout(() => {
+      if (!trackId) {
+        setCount(0);
+        setHasReacted(false);
+        return;
+      }
 
-    // localStorage에서 이미 리액션했는지 확인
-    const reactedKey = `reacted:${trackId}`;
-    setHasReacted(localStorage.getItem(reactedKey) === '1');
+      // localStorage에서 이미 리액션했는지 확인
+      const reactedKey = `reacted:${trackId}`;
+      setHasReacted(localStorage.getItem(reactedKey) === '1');
+    }, 0);
+
+    if (!trackId) {
+      return () => window.clearTimeout(updateId);
+    }
 
     // DB에서 카운트 조회
     supabase
@@ -36,6 +45,8 @@ export function useReactionCount(trackId: string | undefined) {
           setCount(data);
         }
       });
+
+    return () => window.clearTimeout(updateId);
   }, [trackId]);
 
   // 리액션 기록 (로컬 낙관적 업데이트)

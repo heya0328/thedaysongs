@@ -69,6 +69,7 @@ interface Props {
 }
 
 export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
+  const bannerRef = useBannerAd();
   const [url, setUrl] = useState(initialUrl ?? '');
   const [parsing, setParsing] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -77,7 +78,10 @@ export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
   const [guideTab, setGuideTab] = useState(0);
   const { openToast } = useToast();
   const openToastRef = useRef(openToast);
-  openToastRef.current = openToast;
+
+  useEffect(() => {
+    openToastRef.current = openToast;
+  }, [openToast]);
 
   // 마운트 시 스크롤 top 0
   useEffect(() => {
@@ -137,15 +141,24 @@ export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
       }
 
       if (!data?.ok) {
-        throw new Error(data?.reason ?? 'parse_error');
+        throw new Error(typeof data?.reason === 'string' ? data.reason : 'parse_error');
+      }
+
+      const title = typeof data.title === 'string' ? data.title : null;
+      const imageUrl = typeof data.imageUrl === 'string' ? data.imageUrl : null;
+      const platform = typeof data.platform === 'string' ? data.platform : null;
+      const artist = typeof data.artist === 'string' ? data.artist : '알 수 없는 아티스트';
+
+      if (title == null || imageUrl == null || platform == null) {
+        throw new Error('parse_error');
       }
 
       onNext({
         url: trimmed,
-        title: data.title,
-        artist: data.artist || '알 수 없는 아티스트',
-        imageUrl: data.imageUrl,
-        platform: data.platform,
+        title,
+        artist,
+        imageUrl,
+        platform,
       });
     } catch (err) {
       const code = err instanceof Error ? err.message : 'unknown';
@@ -203,7 +216,6 @@ export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
     );
   }
 
-  const bannerRef = useBannerAd();
   const hasUrl = url.trim().length > 0;
 
   return (
@@ -247,7 +259,7 @@ export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
             if (inputError) setInputError(null);
           }}
           placeholder="예: https://open.spotify.com/track/..."
-          error={!!inputError}
+          hasError={!!inputError}
           help={inputError ?? undefined}
         />
       </div>
@@ -275,13 +287,13 @@ export function RecommendLinkPage({ onNext, onBack, initialUrl }: Props) {
         <Tab
           fluid={false}
           size="small"
+          onChange={setGuideTab}
           style={{ backgroundColor: adaptive.background }}
         >
           {GUIDE_TABS.map((tab, i) => (
             <Tab.Item
               key={tab.label}
               selected={guideTab === i}
-              backgroundColor={adaptive.background}
               onClick={() => setGuideTab(i)}
             >
               {tab.label}

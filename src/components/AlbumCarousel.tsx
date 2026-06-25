@@ -73,7 +73,7 @@ export function AlbumCarousel({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragDelta, setDragDelta] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [flipped, setFlipped] = useState(false);
+  const [flipState, setFlipState] = useState({ index: activeIndex, flipped: false });
   const dragDeltaRef = useRef(0);
   const isDraggingRef = useRef(false);
   const dragState = useRef({
@@ -82,14 +82,12 @@ export function AlbumCarousel({
     startTime: 0,
   });
   const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
 
   const isHorizontalRef = useRef<boolean | null>(null);
   const [isGrabbing, setIsGrabbing] = useState(false);
 
-  // 카드 전환 시 flip 초기화
   useEffect(() => {
-    setFlipped(false);
+    activeIndexRef.current = activeIndex;
   }, [activeIndex]);
 
   // 이미지 프리로드
@@ -151,7 +149,7 @@ export function AlbumCarousel({
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch { /* ignore */ }
-  }, []);
+  }, [tracks.length]);
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -215,7 +213,10 @@ export function AlbumCarousel({
         setIsDragging(false);
         setIsGrabbing(false);
         setDragDelta(0);
-        setFlipped((v) => !v);
+        setFlipState((current) => ({
+          index: idx,
+          flipped: current.index === idx ? !current.flipped : true,
+        }));
         return;
       }
 
@@ -341,6 +342,7 @@ export function AlbumCarousel({
           const style = getCardStyle(distance, isDragging ? dragDelta : 0, isDragging);
           // grab 피드백: 활성 카드가 잡히면 살짝 커짐
           const isActive = distance === 0;
+          const flipped = flipState.index === activeIndex && flipState.flipped;
           const grabbing = isActive && isGrabbing;
           const grabScale = grabbing ? 1.04 : 1;
           const finalScale = style.scale * grabScale;

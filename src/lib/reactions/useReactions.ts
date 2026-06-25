@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EmojiConfig, ReactionParticle } from '../../types';
 import { MAX_CONCURRENT_REACTIONS, REACTION_TIMEOUT_MS } from '../../constants';
 import { useReactionChannel } from './useReactionChannel';
@@ -19,21 +19,29 @@ type UseReactionsOptions = {
 export function useReactions(options: UseReactionsOptions = {}) {
   const { trackId, onReactionSent, onReactionLimitReached } = options;
   const onReactionSentRef = useRef(onReactionSent);
-  onReactionSentRef.current = onReactionSent;
   const onLimitRef = useRef(onReactionLimitReached);
-  onLimitRef.current = onReactionLimitReached;
 
   const clickCountRef = useRef(0);
   const toastCooldownRef = useRef(false);
   const prevTrackIdRef = useRef(trackId);
 
-  // trackId 변경 시 카운트 리셋
-  if (prevTrackIdRef.current !== trackId) {
-    prevTrackIdRef.current = trackId;
-    clickCountRef.current = 0;
-  }
-
   const [activeReactions, setActiveReactions] = useState<ReactionParticle[]>([]);
+
+  useEffect(() => {
+    onReactionSentRef.current = onReactionSent;
+  }, [onReactionSent]);
+
+  useEffect(() => {
+    onLimitRef.current = onReactionLimitReached;
+  }, [onReactionLimitReached]);
+
+  // trackId 변경 시 카운트 리셋
+  useEffect(() => {
+    if (prevTrackIdRef.current !== trackId) {
+      prevTrackIdRef.current = trackId;
+      clickCountRef.current = 0;
+    }
+  }, [trackId]);
 
   const addReaction = useCallback((config: EmojiConfig) => {
     const id = Date.now() + Math.floor(Math.random() * 10_000);
