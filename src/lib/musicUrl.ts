@@ -80,12 +80,17 @@ async function ensureClipboardPermission(): Promise<boolean> {
 function reconstructMusicUrl(raw: string): string | null {
   // 유니코드 공백·제어문자만 제거 (SDK가 삽입하는 Line Separator 등)
   // URL 문자 치환은 하지 않음 — regex에서 유연하게 매칭
-  const cleaned = raw.replace(/[\s\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '');
+  const cleaned = raw
+    .replace(/\s/g, '')
+    .replace(/\u200B/g, '')
+    .replace(/\u200C/g, '')
+    .replace(/\u200D/g, '')
+    .replace(/\uFEFF/g, '');
 
   let m;
 
   // Spotify: 도메인 + track/album + 22자 ID — 구분자는 아무 문자 허용
-  m = cleaned.match(/open\.spotify\.com.*?(intl-\w+.track|track|album).*?([A-Za-z0-9]{22})/i);
+  m = cleaned.match(/open\.spotify\.com.*?(intl-\w+[/.-]track|track|album).*?([A-Za-z0-9]{22})/i);
   if (m) {
     const type = m[1].replace(/[^a-z0-9/-]/gi, '/').replace(/\/+/g, '/');
     return `https://open.spotify.com/${type}/${m[2]}`;
@@ -111,7 +116,7 @@ function reconstructMusicUrl(raw: string): string | null {
   if (m) return `https://www.youtube.com/watch?v=${m[2]}`;
 
   // youtu.be/{id}
-  m = cleaned.match(/youtu\.be.([A-Za-z0-9_-]+)/i);
+  m = cleaned.match(/youtu\.be[/.-]([A-Za-z0-9_-]+)/i);
   if (m) return `https://youtu.be/${m[1]}`;
 
   // YouTube playlist: youtube.com ... playlist?list={id}

@@ -1,13 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TossAds } from '@apps-in-toss/web-framework';
 import type { TossAdsAttachBannerOptions } from '@apps-in-toss/web-framework';
 
-// TODO: 실제 광고 그룹 ID로 교체
-const BANNER_AD_GROUP_ID = 'ait.v2.live.0b21287b0c144a92';
+const LIVE_BANNER_AD_GROUP_ID = 'ait.v2.live.0b21287b0c144a92';
+const TEST_BANNER_AD_GROUP_ID = 'ait-ad-test-banner-id';
+
+const useTestAds =
+  import.meta.env.DEV || import.meta.env.VITE_USE_TEST_ADS === 'true';
+
+const BANNER_AD_GROUP_ID = useTestAds
+  ? TEST_BANNER_AD_GROUP_ID
+  : (import.meta.env.VITE_BANNER_AD_GROUP_ID?.trim() || LIVE_BANNER_AD_GROUP_ID);
 
 let initialized = false;
 let initializing = false;
 const onInitCallbacks: Array<() => void> = [];
+
+function flushInitCallbacks() {
+  onInitCallbacks.forEach((fn) => fn());
+  onInitCallbacks.length = 0;
+}
+
+function resetPendingInitCallbacks() {
+  onInitCallbacks.length = 0;
+}
 
 function ensureInitialized(cb: () => void) {
   if (initialized) {
@@ -19,8 +35,14 @@ function ensureInitialized(cb: () => void) {
   initializing = true;
 
   try {
-    if (!TossAds.initialize.isSupported()) return;
+    if (!TossAds.initialize.isSupported()) {
+      initializing = false;
+      resetPendingInitCallbacks();
+      return;
+    }
   } catch {
+    initializing = false;
+    resetPendingInitCallbacks();
     return;
   }
 
@@ -28,12 +50,13 @@ function ensureInitialized(cb: () => void) {
     callbacks: {
       onInitialized: () => {
         initialized = true;
-        onInitCallbacks.forEach((fn) => fn());
-        onInitCallbacks.length = 0;
+        initializing = false;
+        flushInitCallbacks();
       },
       onInitializationFailed: (error) => {
         console.error('[banner-ad] init failed:', error);
         initializing = false;
+        resetPendingInitCallbacks();
       },
     },
   });
@@ -65,6 +88,9 @@ export function useBannerAd(options?: Omit<TossAdsAttachBannerOptions, 'callback
         callbacks: {
           onAdFailedToRender: (payload) => {
             console.warn('[banner-ad] render failed:', payload.error?.message);
+          },
+          onNoFill: () => {
+            console.info('[banner-ad] no fill');
           },
         },
       });

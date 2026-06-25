@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAnonUserId } from './anonUserId';
@@ -21,11 +21,7 @@ export function useReactionChannel({ enabled = true, trackId, onReceive }: Optio
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastSendRef = useRef(0);
   const onReceiveRef = useRef(onReceive);
-  const userIdRef = useRef<string>('');
-
-  if (userIdRef.current === '') {
-    userIdRef.current = getAnonUserId();
-  }
+  const [userId] = useState(getAnonUserId);
 
   useEffect(() => {
     onReceiveRef.current = onReceive;
@@ -39,12 +35,12 @@ export function useReactionChannel({ enabled = true, trackId, onReceive }: Optio
     channel.on('broadcast', { event: EVENT_NAME }, (payload) => {
       const message = payload.payload as ReactionMessage | undefined;
       if (!message || typeof message.key !== 'string') return;
-      if (message.senderId === userIdRef.current) return;
+      if (message.senderId === userId) return;
       onReceiveRef.current(message.key);
     });
     channel.subscribe();
     channelRef.current = channel;
-  }, []);
+  }, [userId]);
 
   const unsubscribe = useCallback(() => {
     if (!channelRef.current) return;
@@ -77,7 +73,6 @@ export function useReactionChannel({ enabled = true, trackId, onReceive }: Optio
   const sendReaction = useCallback((key: string) => {
     const now = Date.now();
     if (now - lastSendRef.current < SEND_THROTTLE_MS) return false;
-    const userId = userIdRef.current;
     if (!userId) return false;
     lastSendRef.current = now;
     void supabase.functions
@@ -86,7 +81,7 @@ export function useReactionChannel({ enabled = true, trackId, onReceive }: Optio
         // network or quota failure — drop silently, local animation still plays
       });
     return true;
-  }, []);
+  }, [userId]);
 
   return { sendReaction };
 }

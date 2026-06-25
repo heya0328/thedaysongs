@@ -71,10 +71,15 @@ function App() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
   const recommendDataRef = useRef(recommendData);
-  recommendDataRef.current = recommendData;
-
   const pageRef = useRef(page);
-  pageRef.current = page;
+
+  useEffect(() => {
+    recommendDataRef.current = recommendData;
+  }, [recommendData]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
 
   // 페이지 변경 시 sessionStorage에 저장
   useEffect(() => {

@@ -14,6 +14,7 @@ interface ParsedMetadata {
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
 export function LinkTestPage({ onBack }: { onBack: () => void }) {
+  void onBack;
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);

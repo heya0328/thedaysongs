@@ -22,7 +22,6 @@ import { PullToRefreshIndicator } from '../components/PullToRefreshIndicator';
 export function ResultPage({ onClickRecommend, onGoHome, skipClipboardToast }: { onClickRecommend?: (prefillUrl?: string) => void; onGoHome?: () => void; skipClipboardToast?: boolean }) {
   const toast = useToast();
   const toastRef = useRef(toast);
-  toastRef.current = toast;
   const lastClipboardTextRef = useRef<string>('');
   const skipInitialToastRef = useRef(!!skipClipboardToast);
   const {
@@ -40,6 +39,10 @@ export function ResultPage({ onClickRecommend, onGoHome, skipClipboardToast }: {
 
   const [listenSheetOpen, setListenSheetOpen] = useState(false);
   const [overflowSheetOpen, setOverflowSheetOpen] = useState(false);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   const { pullDistance, refreshing, handlers: pullHandlers } = usePullToRefresh({
     onRefresh: refresh,
@@ -70,7 +73,10 @@ export function ResultPage({ onClickRecommend, onGoHome, skipClipboardToast }: {
 
   // 콜백을 ref로 보관 (useEffect 의존성에서 제외)
   const onClickRecommendRef = useRef(onClickRecommend);
-  onClickRecommendRef.current = onClickRecommend;
+
+  useEffect(() => {
+    onClickRecommendRef.current = onClickRecommend;
+  }, [onClickRecommend]);
 
   // 퍼널에 진입한 링크를 sessionStorage에 저장하여 중복 토스트 방지
   const DISMISSED_KEY = 'tds-toast-dismissed-url';
@@ -94,7 +100,6 @@ export function ResultPage({ onClickRecommend, onGoHome, skipClipboardToast }: {
         button: {
           text: '추천하기',
           onClick: () => {
-            toastRef.current.closeToast();
             // 퍼널로 진입한 링크 기록 → 돌아와도 토스트 안 뜸
             try { sessionStorage.setItem(DISMISSED_KEY, trimmed); } catch { /* ignore */ }
             onClickRecommendRef.current?.(trimmed);
@@ -234,7 +239,7 @@ export function ResultPage({ onClickRecommend, onGoHome, skipClipboardToast }: {
         onClose={() => setListenSheetOpen(false)}
         track={track}
         isUserRecommendation={isUserRecommendation}
-        openToast={toastRef.current.openToast}
+        openToast={toast.openToast}
       />
 
       <OverflowTrackSheet

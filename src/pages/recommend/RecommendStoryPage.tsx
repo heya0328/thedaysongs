@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { css } from '@emotion/react';
-import { Top, TextArea, BottomCTA, Result, Asset, Button } from '@toss/tds-mobile';
+import { Top, TextArea, BottomCTA, Result, Asset } from '@toss/tds-mobile';
 import { adaptive } from '@toss/tds-colors';
 import type { RecommendData } from './types';
 import { STORY_MAX_LENGTH } from '../../constants';

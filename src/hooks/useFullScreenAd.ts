@@ -1,102 +1,183 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-framework';
 
-const AD_GROUP_ID = 'ait.v2.live.8abe96d26b2d45f2';
+const LIVE_FULLSCREEN_AD_GROUP_ID = 'ait.v2.live.8abe96d26b2d45f2';
+const TEST_FULLSCREEN_AD_GROUP_ID = 'ait-ad-test-interstitial-id';
+const LOAD_WAIT_MS = 3000;
+const LOAD_POLL_MS = 100;
+
+const useTestAds =
+  import.meta.env.DEV || import.meta.env.VITE_USE_TEST_ADS === 'true';
+
+const FULLSCREEN_AD_GROUP_ID = useTestAds
+  ? TEST_FULLSCREEN_AD_GROUP_ID
+  : (import.meta.env.VITE_FULLSCREEN_AD_GROUP_ID?.trim() || LIVE_FULLSCREEN_AD_GROUP_ID);
+
+function isSupported(method: { isSupported: () => boolean }) {
+  try {
+    return method.isSupported();
+  } catch {
+    return false;
+  }
+}
 
 export function useFullScreenAd() {
   const [loaded, setLoaded] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const onDismissRef = useRef<(() => void) | null>(null);
+  const loadedRef = useRef(false);
+  const loadingRef = useRef(false);
+  const loadUnregisterRef = useRef<(() => void) | null>(null);
+  const showUnregisterRef = useRef<(() => void) | null>(null);
+  const waitTimerRef = useRef<{
+    timeoutId: number;
+    pollId: number;
+  } | null>(null);
+
+  const clearWaitTimer = useCallback(() => {
+    if (waitTimerRef.current == null) return;
+
+    window.clearTimeout(waitTimerRef.current.timeoutId);
+    window.clearInterval(waitTimerRef.current.pollId);
+    waitTimerRef.current = null;
+  }, []);
 
   useEffect(() => {
-    try { if (!loadFullScreenAd.isSupported()) return; } catch { return; }
+    loadedRef.current = loaded;
+  }, [loaded]);
 
-    const unregister = loadFullScreenAd({
-      options: { adGroupId: AD_GROUP_ID },
-      onEvent: (event) => {
-        if (event.type === 'loaded') {
-          setLoaded(true);
-        }
-      },
-      onError: (error) => {
-        console.error('[ad] load failed:', error);
-      },
-    });
+  const requestLoad = useCallback(() => {
+    if (!isSupported(loadFullScreenAd)) {
+      loadingRef.current = false;
+      loadedRef.current = false;
+      setLoaded(false);
+      return false;
+    }
 
-    return () => unregister();
-  }, []);
+    if (loadedRef.current || loadingRef.current) {
+      return true;
+    }
 
-  const reload = useCallback(() => {
+    loadingRef.current = true;
+    loadedRef.current = false;
     setLoaded(false);
-    try { if (!loadFullScreenAd.isSupported()) return; } catch { return; }
+    loadUnregisterRef.current?.();
 
-    loadFullScreenAd({
-      options: { adGroupId: AD_GROUP_ID },
-      onEvent: (event) => {
-        if (event.type === 'loaded') setLoaded(true);
-      },
-      onError: (error) => {
-        console.error('[ad] reload failed:', error);
-      },
-    });
+    try {
+      loadUnregisterRef.current = loadFullScreenAd({
+        options: { adGroupId: FULLSCREEN_AD_GROUP_ID },
+        onEvent: (event) => {
+          if (event.type !== 'loaded') return;
+
+          loadingRef.current = false;
+          loadedRef.current = true;
+          setLoaded(true);
+        },
+        onError: (error) => {
+          console.error('[ad] load failed:', error);
+          loadingRef.current = false;
+          loadedRef.current = false;
+          setLoaded(false);
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('[ad] load failed:', error);
+      loadingRef.current = false;
+      loadedRef.current = false;
+      setLoaded(false);
+      return false;
+    }
   }, []);
 
-  const loadedRef = useRef(loaded);
-  loadedRef.current = loaded;
+  useEffect(() => {
+    const loadId = window.setTimeout(() => {
+      requestLoad();
+    }, 0);
 
-  const showAd = useCallback((onDismiss: () => void) => {
-    let supported = false;
-    try { supported = showFullScreenAd.isSupported(); } catch { /* non-toss env */ }
-    if (!supported) {
+    return () => {
+      window.clearTimeout(loadId);
+      clearWaitTimer();
+      loadUnregisterRef.current?.();
+      showUnregisterRef.current?.();
+      loadUnregisterRef.current = null;
+      showUnregisterRef.current = null;
+    };
+  }, [clearWaitTimer, requestLoad]);
+
+  const finishShow = useCallback(() => {
+    const onDismiss = onDismissRef.current;
+
+    onDismissRef.current = null;
+    showUnregisterRef.current?.();
+    showUnregisterRef.current = null;
+    setWaiting(false);
+    requestLoad();
+    onDismiss?.();
+  }, [requestLoad]);
+
+  const showLoadedAd = useCallback((onDismiss: () => void) => {
+    clearWaitTimer();
+
+    if (!isSupported(showFullScreenAd)) {
       onDismiss();
       return;
     }
 
     onDismissRef.current = onDismiss;
+    loadedRef.current = false;
+    setLoaded(false);
+    showUnregisterRef.current?.();
 
-    showFullScreenAd({
-      options: { adGroupId: AD_GROUP_ID },
-      onEvent: (event) => {
-        if (event.type === 'dismissed' || event.type === 'failedToShow') {
-          const cb = onDismissRef.current;
-          onDismissRef.current = null;
-          reload();
-          cb?.();
-        }
-      },
-      onError: () => {
-        const cb = onDismissRef.current;
-        onDismissRef.current = null;
-        reload();
-        cb?.();
-      },
-    });
-  }, [reload]);
+    try {
+      showUnregisterRef.current = showFullScreenAd({
+        options: { adGroupId: FULLSCREEN_AD_GROUP_ID },
+        onEvent: (event) => {
+          if (event.type === 'dismissed' || event.type === 'failedToShow') {
+            finishShow();
+          }
+        },
+        onError: (error) => {
+          console.error('[ad] show failed:', error);
+          finishShow();
+        },
+      });
+    } catch (error) {
+      console.error('[ad] show failed:', error);
+      finishShow();
+    }
+  }, [clearWaitTimer, finishShow]);
 
   const show = useCallback((onDismiss: () => void) => {
-    // 이미 로드됐으면 바로 표시
     if (loadedRef.current) {
-      showAd(onDismiss);
+      showLoadedAd(onDismiss);
       return;
     }
-    // 아직 로딩 중이면 최대 3초 대기 + waiting 상태 표시
+
+    if (!isSupported(loadFullScreenAd) || !isSupported(showFullScreenAd)) {
+      onDismiss();
+      return;
+    }
+
+    requestLoad();
+    clearWaitTimer();
     setWaiting(true);
-    const done = (cb: () => void) => {
+
+    const timeoutId = window.setTimeout(() => {
+      clearWaitTimer();
       setWaiting(false);
-      cb();
-    };
-    const timeout = setTimeout(() => {
-      clearInterval(poll);
-      done(onDismiss);
-    }, 3000);
-    const poll = setInterval(() => {
+      onDismiss();
+    }, LOAD_WAIT_MS);
+
+    const pollId = window.setInterval(() => {
       if (loadedRef.current) {
-        clearTimeout(timeout);
-        clearInterval(poll);
-        done(() => showAd(onDismiss));
+        clearWaitTimer();
+        showLoadedAd(onDismiss);
       }
-    }, 100);
-  }, [showAd]);
+    }, LOAD_POLL_MS);
+
+    waitTimerRef.current = { timeoutId, pollId };
+  }, [clearWaitTimer, requestLoad, showLoadedAd]);
 
   return { loaded, waiting, show };
 }
